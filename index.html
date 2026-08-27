@@ -12,7 +12,8 @@
   h1{font-size:20px;margin:0 0 16px;color:#2f7dfb}
   p{font-size:15px;line-height:1.6;margin:8px 0;color:#b9b9c4}
   a.btn{display:block;margin:10px 0;padding:14px;border-radius:10px;background:#1a1a20;
-        color:#e9e9ee;text-decoration:none;font-size:16px;border:1px solid #2a2a33}
+        color:#e9e9ee;text-decoration:none;font-size:15px;border:1px solid #2a2a33;
+        word-break:break-all}
   a.btn b{color:#2f7dfb}
   .hint{font-size:13px;color:#7a7a86;margin-top:18px}
 </style>
@@ -25,50 +26,34 @@
 </div>
 <script>
 (function () {
-  // GitHub API로 읽는다. raw.githubusercontent 는 CDN이 5분간 옛 값을
-  // 물고 있어 망을 바꾼 직후 엉뚱한 주소로 넘어가는 일이 있었다.
-  var API = "https://api.github.com/repos/gksfka5771-bit/jackson-link/contents/ip.txt?ref=main";
-  var PORT = 8765;
+  // GitHub API로 읽는다. raw.githubusercontent 는 CDN이 옛 값을 물고 있어
+  // 망을 바꾼 직후 엉뚱한 주소로 넘어가는 일이 있었다.
+  var API = "https://api.github.com/repos/gksfka5771-bit/jackson-link/contents/links.json?ref=main";
   var msg = document.getElementById("msg");
   var links = document.getElementById("links");
 
   // 토큰은 # 뒤에 둔다. 이 부분은 브라우저가 서버로 보내지 않으므로
   // GitHub에는 절대 전달되지 않는다.
   var token = "";
-  location.hash.replace(/^#/, "").split("&").forEach(function (kv) {
+  location.hash.replace(new RegExp("^#"), "").split("&").forEach(function (kv) {
     var i = kv.indexOf("=");
     if (i > 0 && kv.slice(0, i) === "t") token = decodeURIComponent(kv.slice(i + 1));
   });
+  var q = token ? "?t=" + encodeURIComponent(token) : "";
 
   function valid(ip) {
-    var p = ip.split(".");
+    var p = String(ip).split(".");
     return p.length === 4 && p.every(function (x) {
       return /^[0-9]+$/.test(x) && +x >= 0 && +x <= 255;
     });
   }
 
-  function target(ip) {
-    return "http://" + ip + ":" + PORT + "/" + (token ? "?t=" + encodeURIComponent(token) : "");
-  }
-
-  function showLinks(ips) {
-    links.innerHTML = "";
-    ips.forEach(function (ip, i) {
-      var a = document.createElement("a");
-      a.className = "btn";
-      a.href = target(ip);
-      a.innerHTML = (i === 0 ? "<b>지금 주소</b> " : "<b>직전 주소</b> ") + ip;
-      links.appendChild(a);
-    });
-    var hint = document.createElement("p");
-    hint.className = "hint";
-    hint.textContent = "자동 이동이 실패하면 위 주소를 눌러 주십시오.";
-    links.appendChild(hint);
+  function sameSubnet(a, b) {
+    return a.split(".").slice(0, 3).join(".") === b.split(".").slice(0, 3).join(".");
   }
 
   // 폰이 지금 어느 망에 있는지 스스로 알아낸다.
-  // GitHub API 응답은 최대 60초 캐시되므로, 망을 막 바꾼 직후에는
-  // 옛 주소가 돌아올 수 있다. 폰의 사설 IP와 같은 대역을 골라 그걸 막는다.
+  // 같은 망이면 사설 IP로 바로 붙는 편이 빠르고, 밖이면 터널로 가야 한다.
   function localIPs(ms) {
     return new Promise(function (resolve) {
       var found = [], pc;
@@ -93,41 +78,74 @@
     });
   }
 
-  function sameSubnet(a, b) {
-    return a.split(".").slice(0, 3).join(".") === b.split(".").slice(0, 3).join(".");
+  function showLinks(items) {
+    links.innerHTML = "";
+    items.forEach(function (it) {
+      var a = document.createElement("a");
+      a.className = "btn";
+      a.href = it.url;
+      a.innerHTML = "<b>" + it.label + "</b><br>" + it.shown;
+      links.appendChild(a);
+    });
+    var hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent = "자동 이동이 실패하면 위에서 골라 주십시오.";
+    links.appendChild(hint);
   }
 
-  // 쿼리를 매번 바꿔 캐시된 응답을 피한다.
   fetch(API + "&_=" + Date.now(), {
     cache: "no-store",
     headers: { "Accept": "application/vnd.github.raw" }
   })
     .then(function (r) {
       if (!r.ok) throw new Error("주소를 못 읽었습니다 (HTTP " + r.status + ")");
-      return r.text();
+      return r.json();
     })
-    .then(function (text) {
-      var ips = text.trim().split(/[^0-9.]+/).map(function (x) { return x.trim(); }).filter(valid);
-      if (!ips.length) throw new Error("등록된 주소가 없습니다");
-      showLinks(ips);
+    .then(function (data) {
+      var port = data.port || 8765;
+      var ips = (data.ips || []).filter(valid);
+      var tunnel = data.tunnel || "";
+      if (!ips.length && !tunnel) throw new Error("등록된 주소가 없습니다");
+
+      var items = [];
+      if (tunnel) {
+        items.push({ label: "밖에서 접속", shown: tunnel.replace("https://", ""), url: tunnel + q });
+      }
+      ips.forEach(function (ip, i) {
+        items.push({
+          label: i === 0 ? "같은 망(지금 주소)" : "같은 망(직전 주소)",
+          shown: ip + ":" + port,
+          url: "http:" + "//" + ip + ":" + port + "/" + q
+        });
+      });
+      showLinks(items);
+
       return localIPs(1200).then(function (mine) {
+        // 같은 망에 있으면 사설 IP가 가장 빠르다.
         var pick = null;
         mine.forEach(function (my) {
           if (pick) return;
           ips.forEach(function (ip) {
-            if (!pick && sameSubnet(my, ip)) pick = ip;
+            if (!pick && sameSubnet(my, ip)) {
+              pick = "http:" + "//" + ip + ":" + port + "/" + q;
+            }
           });
         });
-        return pick || ips[0];
+        // 같은 망이 아니면(밖에 있으면) 터널로 나간다.
+        if (!pick && tunnel) pick = tunnel + q;
+        // 터널이 아직 안 서 있으면 마지막으로 알려진 사설 IP라도 시도한다.
+        if (!pick && ips.length) pick = "http:" + "//" + ips[0] + ":" + port + "/" + q;
+        return pick;
       });
     })
-    .then(function (ip) {
-      msg.textContent = ip + " 로 연결합니다…";
-      location.replace(target(ip));
+    .then(function (url) {
+      if (!url) throw new Error("연결할 주소를 정하지 못했습니다");
+      msg.textContent = "연결합니다…";
+      location.replace(url);
     })
     .catch(function (e) {
       msg.innerHTML = "연결 실패<br><br>" + e.message +
-        "<br><br>노트북이 켜져 있고 폰과 같은 네트워크에 있는지 확인해 주십시오.";
+        "<br><br>노트북이 켜져 있는지 확인해 주십시오.";
     });
 })();
 </script>
