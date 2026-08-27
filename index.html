@@ -8,56 +8,82 @@
   body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
        background:#0b0b0d;color:#e9e9ee;font-family:-apple-system,"Segoe UI",Roboto,sans-serif;
        text-align:center;padding:24px;box-sizing:border-box}
-  .box{max-width:420px}
-  h1{font-size:20px;margin:0 0 12px;color:#2f7dfb}
+  .box{max-width:420px;width:100%}
+  h1{font-size:20px;margin:0 0 16px;color:#2f7dfb}
   p{font-size:15px;line-height:1.6;margin:8px 0;color:#b9b9c4}
-  code{background:#1a1a20;padding:2px 6px;border-radius:4px;font-size:13px}
+  a.btn{display:block;margin:10px 0;padding:14px;border-radius:10px;background:#1a1a20;
+        color:#e9e9ee;text-decoration:none;font-size:16px;border:1px solid #2a2a33}
+  a.btn b{color:#2f7dfb}
+  .hint{font-size:13px;color:#7a7a86;margin-top:18px}
 </style>
 </head>
 <body>
 <div class="box">
   <h1>잭슨 비서실장</h1>
   <p id="msg">노트북 주소를 확인하는 중…</p>
+  <div id="links"></div>
 </div>
 <script>
 (function () {
-  var RAW = "https://raw.githubusercontent.com/gksfka5771-bit/jackson-link/main/ip.txt";
+  // GitHub API로 읽는다. raw.githubusercontent 는 CDN이 5분간 옛 값을
+  // 물고 있어 망을 바꾼 직후 엉뚱한 주소로 넘어가는 일이 있었다.
+  var API = "https://api.github.com/repos/gksfka5771-bit/jackson-link/contents/ip.txt?ref=main";
   var PORT = 8765;
   var msg = document.getElementById("msg");
+  var links = document.getElementById("links");
 
   // 토큰은 # 뒤에 둔다. 이 부분은 브라우저가 서버로 보내지 않으므로
   // GitHub에는 절대 전달되지 않는다.
   var token = "";
-  var hash = location.hash.replace(/^#/, "");
-  hash.split("&").forEach(function (kv) {
+  location.hash.replace(/^#/, "").split("&").forEach(function (kv) {
     var i = kv.indexOf("=");
     if (i > 0 && kv.slice(0, i) === "t") token = decodeURIComponent(kv.slice(i + 1));
   });
 
   function valid(ip) {
     var p = ip.split(".");
-    if (p.length !== 4) return false;
-    return p.every(function (x) {
-      return x !== "" && /^[0-9]+$/.test(x) && +x >= 0 && +x <= 255;
+    return p.length === 4 && p.every(function (x) {
+      return /^[0-9]+$/.test(x) && +x >= 0 && +x <= 255;
     });
   }
 
-  fetch(RAW + "?_=" + Date.now(), { cache: "no-store" })
+  function target(ip) {
+    return "http://" + ip + ":" + PORT + "/" + (token ? "?t=" + encodeURIComponent(token) : "");
+  }
+
+  function showLinks(ips) {
+    links.innerHTML = "";
+    ips.forEach(function (ip, i) {
+      var a = document.createElement("a");
+      a.className = "btn";
+      a.href = target(ip);
+      a.innerHTML = (i === 0 ? "<b>지금 주소</b> " : "<b>직전 주소</b> ") + ip;
+      links.appendChild(a);
+    });
+    var hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent = "자동 이동이 실패하면 위 주소를 눌러 주십시오.";
+    links.appendChild(hint);
+  }
+
+  fetch(API, {
+    cache: "no-store",
+    headers: { "Accept": "application/vnd.github.raw" }
+  })
     .then(function (r) {
-      if (!r.ok) throw new Error("주소 파일을 못 읽었습니다 (HTTP " + r.status + ")");
+      if (!r.ok) throw new Error("주소를 못 읽었습니다 (HTTP " + r.status + ")");
       return r.text();
     })
     .then(function (text) {
-      var ip = text.trim().split(/\s/)[0];
-      if (!valid(ip)) throw new Error("주소 형식이 올바르지 않습니다: " + ip);
-      msg.textContent = ip + " 로 연결합니다…";
-      var url = "http://" + ip + ":" + PORT + "/";
-      if (token) url += "?t=" + encodeURIComponent(token);
-      location.replace(url);
+      var ips = text.trim().split(/[^0-9.]+/).map(function (x) { return x.trim(); }).filter(valid);
+      if (!ips.length) throw new Error("등록된 주소가 없습니다");
+      msg.textContent = ips[0] + " 로 연결합니다…";
+      showLinks(ips);
+      location.replace(target(ips[0]));
     })
     .catch(function (e) {
       msg.innerHTML = "연결 실패<br><br>" + e.message +
-        "<br><br>노트북이 켜져 있고 폰과 같은 네트워크(집 와이파이 또는 테더링)에 있는지 확인해 주십시오.";
+        "<br><br>노트북이 켜져 있고 폰과 같은 네트워크에 있는지 확인해 주십시오.";
     });
 })();
 </script>
