@@ -3,7 +3,7 @@
     "10.96.142.70",
     "172.30.1.20"
   ],
-  "tunnel": "https://chapel-mayor-halifax-paso.trycloudflare.com",
+  "tunnel": "",
   "port": 8765,
-  "updated": "2026-08-28 09:51:24"
+  "updated": "2026-08-28 10:33:17"
 }
