@@ -3,7 +3,7 @@
     "172.30.1.20",
     "10.96.142.70"
   ],
-  "tunnel": "",
+  "tunnel": "https://winning-map-aim-landing.trycloudflare.com",
   "port": 8765,
-  "updated": "2026-09-06 11:12:25"
+  "updated": "2026-09-06 11:12:43"
 }
