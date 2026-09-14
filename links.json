@@ -1,9 +1,9 @@
 {
   "ips": [
-    "172.30.1.20",
-    "10.229.152.70"
+    "10.229.152.70",
+    "172.30.1.20"
   ],
-  "tunnel": "https://advise-flame-cartoons-heat.trycloudflare.com",
+  "tunnel": "",
   "port": 8765,
-  "updated": "2026-09-13 17:04:47"
+  "updated": "2026-09-14 09:37:02"
 }
