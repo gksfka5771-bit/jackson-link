@@ -121,21 +121,25 @@
       showLinks(items);
 
       return localIPs(1200).then(function (mine) {
-        // 같은 망에 있으면 사설 IP가 가장 빠르다.
-        var pick = null;
+        // 2026-09-27 수정: 같은 폰에서 https 터널 주소는 되고 http 사설 IP
+        // 리다이렉트는 안 되는 현상을 확인했다. 원인은 아직 미확정이며,
+        // 최신 모바일 브라우저의 "항상 보안 연결 사용" 정책은 추정일 뿐이다.
+        // 원인 특정과 무관하게 안전한 방향으로, 우선순위를 "터널(https) 우선"으로 바꾼다.
+        var lan = null;
         mine.forEach(function (my) {
-          if (pick) return;
+          if (lan) return;
           ips.forEach(function (ip) {
-            if (!pick && sameSubnet(my, ip)) {
-              pick = "http:" + "//" + ip + ":" + port + "/" + q;
+            if (!lan && sameSubnet(my, ip)) {
+              lan = "http:" + "//" + ip + ":" + port + "/" + q;
             }
           });
         });
-        // 같은 망이 아니면(밖에 있으면) 터널로 나간다.
-        if (!pick && tunnel) pick = tunnel + q;
-        // 터널이 아직 안 서 있으면 마지막으로 알려진 사설 IP라도 시도한다.
-        if (!pick && ips.length) pick = "http:" + "//" + ips[0] + ":" + port + "/" + q;
-        return pick;
+        // 터널이 있으면 무조건 터널을 우선한다(https라 브라우저 정책에 안 걸림).
+        if (tunnel) return tunnel + q;
+        // 터널이 없을 때만 같은 망 사설 IP로 대체한다.
+        if (lan) return lan;
+        if (ips.length) return "http:" + "//" + ips[0] + ":" + port + "/" + q;
+        return null;
       });
     })
     .then(function (url) {
